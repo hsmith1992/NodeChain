@@ -1,43 +1,98 @@
-const SHA256 = require('crypto-js/sha256');
+const ChainUtil = require("../chain-utils");
+const { DIFFICULTY, MINE_RATE } = require("../config.js");
 
 class Block {
-    constructor(timestamp, lastHash, hash, data) {
-        this.timestamp = timestamp;
-        this.lastHash = lastHash;
-        this.hash = hash;
-        this.data = data;
-    }
+  constructor(timestamp, lastHash, hash, data, nonce, difficulty) {
+    this.timestamp = timestamp;
+    this.lastHash = lastHash;
+    this.hash = hash;
+    this.data = data;
+    this.nonce = nonce;
+    this.difficulty = difficulty || DIFFICULTY;
+  }
 
-    toString() {
-        return `Block - 
+  /**
+   * returns what the object looks like
+   * substring is used to make it look nice
+   * hashes are too big to printed on command line
+   */
+
+  toString() {
+    return `Block - 
         Timestamp : ${this.timestamp}
         Last Hash : ${this.lastHash.substring(0, 10)}
         Hash      : ${this.hash.substring(0, 10)}
-        Data      : ${this.data}`;
-    }
+        Nonce     : ${this.nonce}
+        Data      : ${this.data}
+        Difficulty: ${this.difficulty}`;
+  }
 
-    static genesis() {
-        return new this('Genesis time', '----', 'genesis-hash', []);
-    }
+  /**
+   * function to create the first block or the genesis block
+   */
 
-    static hash(timestamp, lastHash, data) {
-        return SHA256(`${timestamp}${lastHash}${data}`).toString();
-    }
+  static genesis() {
+    return new this("Genesis time", "----", "f1574-h4gh", [], 0, DIFFICULTY);
+  }
 
-    static mineBlock(lastBlock, data) {
+  /**
+   * function to create new blocks or to mine new blocks
+   */
 
-        let hash;
-        let timestamp = Date.now();
-        const lastHash = lastBlock.hash;
-        hash = Block.hash(timestamp, lastHash, data);
-        return new this(timestamp, lastHash, hash, data);
-    }
+  static mineBlock(lastBlock, data) {
+    let hash;
+    let timestamp;
+    const lastHash = lastBlock.hash;
 
-    static blockHash(block) {
-        //destructuring
-        const { timestamp, lastHash, data } = block;
-        return Block.hash(timestamp, lastHash, data);
-    }
+    let { difficulty } = lastBlock;
+
+    let nonce = 0;
+    //generate the hash of the block
+    do {
+      nonce++;
+      timestamp = Date.now();
+      difficulty = Block.adjustDifficulty(lastBlock, timestamp);
+      hash = Block.hash(timestamp, lastHash, data, nonce, difficulty);
+      // checking if we have the required no of leading number of zeros
+    } while (hash.substring(0, difficulty) !== "0".repeat(difficulty));
+
+    return new this(timestamp, lastHash, hash, data, nonce, difficulty);
+  }
+
+  /**
+   * function to create the hash value of the block data
+   */
+
+  static hash(timestamp, lastHash, data, nonce, difficulty) {
+    return ChainUtil.hash(
+      `${timestamp}${lastHash}${data}${nonce}${difficulty}`
+    );
+  }
+
+  /**
+   * return the hash value of the passed block
+   */
+
+  static blockHash(block) {
+    //destructuring
+    const { timestamp, lastHash, data, nonce, difficulty } = block;
+    return Block.hash(timestamp, lastHash, data, nonce, difficulty);
+  }
+
+  /**
+   * utility function to adjust difficulty
+   */
+
+  static adjustDifficulty(lastBlock, currentTime) {
+    let { difficulty } = lastBlock;
+    difficulty =
+      lastBlock.timestamp + MINE_RATE > currentTime
+        ? difficulty + 1
+        : difficulty - 1;
+    return difficulty;
+  }
 }
+
+// share this class by exporting it
 
 module.exports = Block;
